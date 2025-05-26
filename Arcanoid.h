@@ -1,9 +1,12 @@
-﻿#pragma once
+#pragma once
 #define _USE_MATH_DEFINES
 #include <SFML/Graphics.hpp>
 #include <vector>
-#include <memory>
 #include <cmath>
+#include <ctime>
+#include <cstdlib>
+#include <iostream>
+#include <locale>
 
 using namespace sf;
 using namespace std;
@@ -32,19 +35,7 @@ constexpr int   COLS = 10, ROWS = 4;
 const float FIELD_W = COLS * BLOCK_W + (COLS - 1) * GAP_X;
 const float OFF_X = (WIN_W - FIELD_W) / 2.f;
 
-struct Bonus {
-    enum class Type { PadSize, BallSpeed, Sticky, BottomSave, Trajectory };
-
-    CircleShape shape;
-    Type  type = Type::PadSize;
-    bool  active = true;
-
-    void update();
-    void deactivate();
-    bool isActive() const;
-
-    static Bonus make(Type t, Vector2f pos);
-};
+class Game;
 
 class Ball {
 public:
@@ -59,38 +50,6 @@ public:
     void randomizeDirection();
 };
 
-class Game;
-
-class Block {
-protected:
-    RectangleShape shp;
-public:
-    bool dead = false, bonus = false, destructible = false;
-    virtual ~Block() = default;
-    virtual bool onHit(Game&, Ball&, std::vector<std::unique_ptr<Bonus>>&) = 0;
-    const RectangleShape& getShape() const;
-};
-
-class IndestructibleBlock : public Block {
-public:
-    explicit IndestructibleBlock(Vector2f p);
-    bool onHit(Game&, Ball&, std::vector<std::unique_ptr<Bonus>>&) override;
-};
-
-class SpeedUpBlock : public Block {
-public:
-    explicit SpeedUpBlock(Vector2f p);
-    bool onHit(Game&, Ball&, std::vector<std::unique_ptr<Bonus>>&) override;
-};
-
-class HealthBlock : public Block {
-    int hp;
-public:
-    HealthBlock(Vector2f p, int h, bool hasB);
-    void updateCol();
-    bool onHit(Game&, Ball&, std::vector<std::unique_ptr<Bonus>>&) override;
-};
-
 class Paddle {
 public:
     RectangleShape shp;
@@ -98,34 +57,104 @@ public:
     void input();
 };
 
+class Bonus {
+public:
+    CircleShape shape;
+    bool active = true;
+
+    virtual ~Bonus() = default;
+    virtual void apply(Game&) = 0;
+
+    void update();
+    void deactivate();
+    bool isActive() const;
+};
+
+class PadSizeBonus : public Bonus {
+public:
+    PadSizeBonus(Vector2f);
+    void apply(Game&) override;
+};
+
+class BallSpeedBonus : public Bonus {
+public:
+    BallSpeedBonus(Vector2f);
+    void apply(Game&) override;
+};
+
+class StickyBonus : public Bonus {
+public:
+    StickyBonus(Vector2f);
+    void apply(Game&) override;
+};
+
+class BottomSaveBonus : public Bonus {
+public:
+    BottomSaveBonus(Vector2f);
+    void apply(Game&) override;
+};
+
+class TrajectoryBonus : public Bonus {
+public:
+    TrajectoryBonus(Vector2f);
+    void apply(Game&) override;
+};
+
+class Block {
+protected:
+    RectangleShape shp;
+public:
+    bool dead = false, bonus = false, destructible = false;
+    virtual ~Block() = default;
+    virtual bool onHit(Game&, Ball&, std::vector<Bonus*>&) = 0;
+    const RectangleShape& getShape() const;
+};
+
+class IndestructibleBlock : public Block {
+public:
+    explicit IndestructibleBlock(Vector2f);
+    bool onHit(Game&, Ball&, std::vector<Bonus*>&) override;
+};
+
+class SpeedUpBlock : public Block {
+public:
+    explicit SpeedUpBlock(Vector2f);
+    bool onHit(Game&, Ball&, std::vector<Bonus*>&) override;
+};
+
+class HealthBlock : public Block {
+    int hp;
+public:
+    HealthBlock(Vector2f, int, bool);
+    void updateCol();
+    bool onHit(Game&, Ball&, std::vector<Bonus*>&) override;
+};
+
 class Game {
 public:
     RenderWindow win;
     Ball    ball;
     Paddle  pad;
-    std::vector<std::unique_ptr<Block>> blocks;
-    std::vector<std::unique_ptr<Bonus>> bonuses;
+    std::vector<Block*> blocks;
+    std::vector<Bonus*> bonuses;
 
     int  score = 0, destroyableLeft = 0;
     bool stuck = false, willStick = false, bottom = false, over = false;
 
     Game();
+    ~Game();
 
     void update();
     void draw();
 
-    static float sign(float v);
-    void resolve(const RectangleShape&);
+    static float sign(float);
 
+    void resolve(const RectangleShape&);
     void walls();
     void bottomCol();
     void paddleCol();
     void blockCol();
 
     void bonusUpdate();
-    void applyBonus(Bonus::Type);
-    void spawnBonus(Vector2f pos);
-
-private:
-    void initBlocks();
+    void spawnBonus(Bonus*);
 };
